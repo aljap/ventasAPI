@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -307,7 +308,8 @@ public class Employee
     public string? Position { get; set; }
     public required decimal Salary { get; set; }
     public int CompanyId { get; set; }
-    public required Company Company { get; set; }
+    [JsonIgnore]
+    public Company? Company { get; set; }
     public ICollection<Order>? Orders { get; set; }
 }
 public class Article
@@ -316,7 +318,8 @@ public class Article
     public required string Name { get; set; }
     public required decimal Value { get; set; }
     public int CompanyId { get; set; }
-    public required Company Company { get; set; }
+    [JsonIgnore]
+    public Company? Company { get; set; }
 }
 
 public class Order
@@ -326,8 +329,9 @@ public class Order
     public decimal TotalValue { get; set; }
     public required string Status { get; set; }
     public int EmployeeId { get; set; }
-    public required Employee Employee { get; set; }
-    public required ICollection<OrderDetail> OrderDetails { get; set; }
+    [JsonIgnore]
+    public Employee? Employee { get; set; }
+    public ICollection<OrderDetail>? OrderDetails { get; set; }
     public Invoice? Invoice { get; set; }
 }
 
@@ -335,9 +339,11 @@ public class OrderDetail
 {
     public int Id { get; set; }
     public int ArticleId { get; set; }
-    public required Article Article { get; set; }
+    [JsonIgnore]
+    public Article? Article { get; set; }
     public int OrderId { get; set; }
-    public required Order Order { get; set; }
+    [JsonIgnore]
+    public Order? Order { get; set; }
 }
 
 public class Invoice
@@ -347,7 +353,8 @@ public class Invoice
     public DateTime DeliveryDate { get; set; }
 
     public int OrderId { get; set; }
-    public required Order Order { get; set; }
+    [JsonIgnore]
+    public Order? Order { get; set; }
 }
 
 public class SalesDbContext : DbContext
