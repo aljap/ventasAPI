@@ -136,14 +136,14 @@ app.MapGet("/companies", async (SalesDbContext db) =>
 app.MapGet("/companies/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Companies.FindAsync(id) is Company company ? Results.Ok(company) : Results.NotFound();
-});
+}).RequireAuthorization();
 app.MapPost("/companies", async (Company company, SalesDbContext db) =>
 {
     db.Companies.Add(company);
     await db.SaveChangesAsync();
     return Results.Created($"/companies/{company.Id}", company);
 
-});
+}).RequireAuthorization();
 app.MapPut("/companies/{id}", async (int id, Company inputCompany, SalesDbContext db) =>
 {
     var company = await db.Companies.FindAsync(id);
@@ -157,7 +157,7 @@ app.MapPut("/companies/{id}", async (int id, Company inputCompany, SalesDbContex
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapDelete("/companies/{id}", async (int id, SalesDbContext db) =>
 {
     var companyDelete = await db.Companies.FindAsync(id);
@@ -168,44 +168,44 @@ app.MapDelete("/companies/{id}", async (int id, SalesDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapGet("/employees", async (SalesDbContext db) =>
 {
     return await db.Employees.ToListAsync();
 
-});
+}).RequireAuthorization();
 app.MapGet("/employees/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Employees.FindAsync(id) is Employee article ? Results.Ok(article) : Results.NotFound();
-});
+}).RequireAuthorization();
 app.MapPost("/employees", async (Employee employee, SalesDbContext db) =>
 {
-    // Validate Employee Name
+
     if (string.IsNullOrWhiteSpace(employee.Name))
     {
         return Results.BadRequest("Employee name is required.");
     }
 
-    // Validate Salary (for example, it must be greater than 0)
+
     if (employee.Salary <= 0)
     {
         return Results.BadRequest("Salary must be greater than 0.");
     }
 
-    // Validate CompanyId
+
     var companyExists = await db.Companies.AnyAsync(c => c.Id == employee.CompanyId);
     if (!companyExists)
     {
         return Results.BadRequest("Invalid CompanyId, the company does not exist.");
     }
 
-    // Add employee to database
+
     db.Employees.Add(employee);
     await db.SaveChangesAsync();
 
-    // Return Created result with the new employee resource location
+
     return Results.Created($"/employees/{employee.Id}", employee);
-});
+}).RequireAuthorization();
 app.MapPut("/employees/{id}", async (int id, Employee inputEmployee, SalesDbContext db) =>
 {
     var employee = await db.Employees.FindAsync(id);
@@ -221,7 +221,7 @@ app.MapPut("/employees/{id}", async (int id, Employee inputEmployee, SalesDbCont
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapDelete("/employees/{id}", async (int id, SalesDbContext db) =>
 {
     var employeeDelete = await db.Employees.FindAsync(id);
@@ -232,21 +232,21 @@ app.MapDelete("/employees/{id}", async (int id, SalesDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapGet("/articles", async (SalesDbContext db) =>
 {
     return await db.Articles.ToListAsync();
-});
+}).RequireAuthorization();
 app.MapGet("/articles/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Articles.FindAsync(id) is Article article ? Results.Ok(article) : Results.NotFound();
-});
+}).RequireAuthorization();
 app.MapPost("/articles", async (Article article, SalesDbContext db) =>
 {
     db.Articles.Add(article);
     await db.SaveChangesAsync();
     return Results.Created($"/articles/{article.Id}", article);
-});
+}).RequireAuthorization();
 app.MapPut("/articles/{id}", async (int id, Article inputArticle, SalesDbContext db) =>
 {
     var article = await db.Articles.FindAsync(id);
@@ -261,7 +261,7 @@ app.MapPut("/articles/{id}", async (int id, Article inputArticle, SalesDbContext
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapDelete("/articles/{id}", async (int id, SalesDbContext db) =>
 {
     var articleDelete = await db.Employees.FindAsync(id);
@@ -272,15 +272,15 @@ app.MapDelete("/articles/{id}", async (int id, SalesDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapGet("/orders", async (SalesDbContext db) =>
 {
     return await db.Orders.ToListAsync();
-});
+}).RequireAuthorization();
 app.MapGet("/orders/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Orders.FindAsync(id) is Order order ? Results.Ok(order) : Results.NotFound();
-});
+}).RequireAuthorization();
 app.MapPost("/orders", async (OrderRequest request, SalesDbContext db) =>
 {
 
@@ -327,7 +327,7 @@ app.MapPost("/orders", async (OrderRequest request, SalesDbContext db) =>
     }
 
     return Results.Created($"/orders/{order.Id}", order);
-});
+}).RequireAuthorization();
 app.MapPut("/orders/{id}", async (int id, Order inputOrder, SalesDbContext db) =>
 {
     var order = await db.Orders.FindAsync(id);
@@ -343,7 +343,7 @@ app.MapPut("/orders/{id}", async (int id, Order inputOrder, SalesDbContext db) =
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapDelete("/orders/{id}", async (int id, SalesDbContext db) =>
 {
     var ordersDelete = await db.Orders.FindAsync(id);
@@ -354,21 +354,21 @@ app.MapDelete("/orders/{id}", async (int id, SalesDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapGet("/ordersDetails", async (SalesDbContext db) =>
 {
     return await db.OrderDetails.ToListAsync();
-});
+}).RequireAuthorization();
 app.MapGet("/ordersDetails/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.OrderDetails.FindAsync(id) is OrderDetail orderDetail ? Results.Ok(orderDetail) : Results.NotFound();
-});
+}).RequireAuthorization();
 app.MapPost("/ordersDetails", async (OrderDetail orderDetail, SalesDbContext db) =>
 {
     db.OrderDetails.Add(orderDetail);
     await db.SaveChangesAsync();
     return Results.Created($"/ordersDetails/{orderDetail.Id}", orderDetail);
-});
+}).RequireAuthorization();
 app.MapPut("/ordersDetails/{id}", async (int id, OrderDetail inputOrderDetail, SalesDbContext db) =>
 {
     var orderDetail = await db.OrderDetails.FindAsync(id);
@@ -382,7 +382,7 @@ app.MapPut("/ordersDetails/{id}", async (int id, OrderDetail inputOrderDetail, S
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapDelete("/ordersDetails/{id}", async (int id, SalesDbContext db) =>
 {
     var ordersDetailsDelete = await db.OrderDetails.FindAsync(id);
@@ -393,15 +393,15 @@ app.MapDelete("/ordersDetails/{id}", async (int id, SalesDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 app.MapGet("/invoices", async (SalesDbContext db) =>
 {
     return await db.Invoices.ToListAsync();
-});
+}).RequireAuthorization();
 app.MapGet("/invoices/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Invoices.FindAsync(id) is Invoice invoice ? Results.Ok(invoice) : Results.NotFound();
-});
+}).RequireAuthorization();
 /* app.MapPost("/invoices", async (Invoice invoice, SalesDbContext db) =>
 {
     db.Invoices.Add(invoice);
@@ -433,7 +433,7 @@ app.MapDelete("/invoices/{id}", async (int id, SalesDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}).RequireAuthorization();
 
 app.MapPut("/orders/{id}/complete", async (int id, SalesDbContext db) =>
 {
@@ -457,7 +457,7 @@ app.MapPut("/orders/{id}/complete", async (int id, SalesDbContext db) =>
     await db.SaveChangesAsync();
 
     return Results.Ok(invoice);
-});
+}).RequireAuthorization();
 
 app.Run();
 
