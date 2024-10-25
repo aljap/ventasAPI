@@ -1,6 +1,12 @@
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,8 +16,56 @@ builder.Services.AddDbContext<SalesDbContext>(options =>
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = "yourdomain.com",
+            ValidAudience = "yourdomain.com",
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("vainitaOMGclavelargaysegura_a234243423423awda"))
+        };
+    });
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Mi API con JWT", Version = "v1" });
+
+    // Configuración para agregar el token JWT en Swagger
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Introduzca 'Bearer' [espacio] seguido de su token JWT."
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
+});
+builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -22,12 +76,63 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
+
+string GenerateJwtToken()
+{
+    var claims = new[]
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, "test"),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim("User","Mi usuario")
+    };
+
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("vainitaOMGclavelargaysegura_a234243423423awda"));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+    var token = new JwtSecurityToken(
+        issuer: "yourdomain.com",
+        audience: "yourdomain.com",
+        claims: claims,
+        expires: DateTime.Now.AddMinutes(30),
+        signingCredentials: creds);
+
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}
+
+app.UseWhen(context => context.Request.Path.StartsWithSegments("/theone"), (appBuilder) =>
+{
+    appBuilder.Use(async (context, next) =>
+    {
+        if (context.Request.Headers.ContainsKey("Key") && context.Request.Headers["Key"].ToString() == "vainitaOMG")
+        {
+            await next();
+        }
+        else
+        {
+            context.Response.StatusCode = 400;
+            await context.Response.WriteAsync("Falta el header X-Custom-Header.");
+        }
+    });
+});
+
+app.MapPost("/login", async (UserLogin login, SalesDbContext db) =>
+{
+    var user = await db.UserLogins.FirstOrDefaultAsync(u => u.Username == login.Username && u.Password == login.Password);
+    if (user != null)
+    {
+        var token = GenerateJwtToken();
+        return Results.Ok(new { token });
+    }
+    return Results.Unauthorized();
+});
 
 app.MapGet("/companies", async (SalesDbContext db) =>
 {
     return await db.Companies.ToListAsync();
 
-});
+}).RequireAuthorization();
 app.MapGet("/companies/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Companies.FindAsync(id) is Company company ? Results.Ok(company) : Results.NotFound();
@@ -176,10 +281,51 @@ app.MapGet("/orders/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Orders.FindAsync(id) is Order order ? Results.Ok(order) : Results.NotFound();
 });
-app.MapPost("/orders", async (Order order, SalesDbContext db) =>
+app.MapPost("/orders", async (OrderRequest request, SalesDbContext db) =>
 {
-    db.Orders.Add(order);
-    await db.SaveChangesAsync();
+
+    var order = request.Order;
+    var orderDetails = request.OrderDetails;
+    if (order == null || orderDetails == null)
+    {
+        return Results.BadRequest("Bad request");
+    }
+
+    if (!orderDetails.Any())
+    {
+        return Results.BadRequest("An order must have at least one associated article");
+    }
+    var employee = await db.Employees.FindAsync(order.EmployeeId);
+    if (employee is null) return Results.NotFound("Employee not found");
+
+    foreach (var detail in orderDetails)
+    {
+        var article = await db.Articles.FindAsync(detail.ArticleId);
+        if (article is null)
+        {
+            return Results.BadRequest("Article not found.");
+        }
+
+        if (article.CompanyId != employee.CompanyId)
+        {
+            return Results.BadRequest("All articles must belong to the same company as the employee.");
+        }
+    }
+
+    using var transaction = await db.Database.BeginTransactionAsync();
+    try
+    {
+        db.Orders.Add(order);
+        db.OrderDetails.AddRange(orderDetails);
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+    }
+    catch
+    {
+        await transaction.RollbackAsync();
+        return Results.Problem("An error occurred while creating the order.", statusCode: 500);
+    }
+
     return Results.Created($"/orders/{order.Id}", order);
 });
 app.MapPut("/orders/{id}", async (int id, Order inputOrder, SalesDbContext db) =>
@@ -256,13 +402,13 @@ app.MapGet("/invoices/{id}", async (int id, SalesDbContext db) =>
 {
     return await db.Invoices.FindAsync(id) is Invoice invoice ? Results.Ok(invoice) : Results.NotFound();
 });
-app.MapPost("/invoices", async (Invoice invoice, SalesDbContext db) =>
+/* app.MapPost("/invoices", async (Invoice invoice, SalesDbContext db) =>
 {
     db.Invoices.Add(invoice);
     await db.SaveChangesAsync();
     return Results.Created($"/invoices/{invoice.Id}", invoice);
-});
-app.MapPut("/invoices/{id}", async (int id, Invoice inputInvoice, SalesDbContext db) =>
+}); */
+/* app.MapPut("/invoices/{id}", async (int id, Invoice inputInvoice, SalesDbContext db) =>
 {
     var invoice = await db.Invoices.FindAsync(id);
 
@@ -276,7 +422,7 @@ app.MapPut("/invoices/{id}", async (int id, Invoice inputInvoice, SalesDbContext
     await db.SaveChangesAsync();
     return Results.NoContent();
 
-});
+}); */
 app.MapDelete("/invoices/{id}", async (int id, SalesDbContext db) =>
 {
     var invoiceDelete = await db.Invoices.FindAsync(id);
@@ -289,6 +435,29 @@ app.MapDelete("/invoices/{id}", async (int id, SalesDbContext db) =>
 
 });
 
+app.MapPut("/orders/{id}/complete", async (int id, SalesDbContext db) =>
+{
+    var order = await db.Orders.FindAsync(id);
+
+    if (order is null) return Results.NotFound();
+
+
+    order.Status = "Completed";
+    await db.SaveChangesAsync();
+
+
+    var invoice = new Invoice
+    {
+        OrderId = order.Id,
+        Status = "Pending",
+        DeliveryDate = DateTime.UtcNow.AddDays(7)
+    };
+
+    db.Invoices.Add(invoice);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(invoice);
+});
 
 app.Run();
 
@@ -357,6 +526,28 @@ public class Invoice
     public Order? Order { get; set; }
 }
 
+public class EmployeeDto
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public string? Position { get; set; }
+    public required decimal Salary { get; set; }
+    public int CompanyId { get; set; }
+
+}
+public class OrderRequest
+{
+    public required Order Order { get; set; }
+    public required List<OrderDetail> OrderDetails { get; set; }
+}
+public class UserLogin
+{
+    public int Id { get; set; }
+    public required string Username { get; set; }
+    public required string Password { get; set; }
+}
+
+
 public class SalesDbContext : DbContext
 {
     public DbSet<Company> Companies { get; set; }
@@ -365,6 +556,7 @@ public class SalesDbContext : DbContext
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderDetail> OrderDetails { get; set; }
     public DbSet<Invoice> Invoices { get; set; }
+    public DbSet<UserLogin> UserLogins { get; set; }
     public SalesDbContext(DbContextOptions<SalesDbContext> options) : base(options)
     {
     }
